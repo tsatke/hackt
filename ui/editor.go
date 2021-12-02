@@ -68,7 +68,6 @@ func (e *Editor) Close() error {
 func (e *Editor) Draw(screen tcell.Screen) {
 	e.layout.Draw(screen)
 
-	// tabSize := cview.TabSize
 	style := tcell.Style{}.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
 
 	lines := e.content.Lines()
@@ -81,7 +80,6 @@ func (e *Editor) Draw(screen tcell.Screen) {
 		}
 		lineBytes := lines[contentLine]
 		lineRunes := []rune(string(lineBytes))
-		tabSpaceBias := 0
 		for screenColumn := x; screenColumn < x+width; screenColumn++ {
 			contentColumn := screenColumn - x
 
@@ -95,52 +93,66 @@ func (e *Editor) Draw(screen tcell.Screen) {
 				r = lineRunes[contentColumn]
 			}
 
-			// FIXME: when replacing tabs with 4 spaces, we get issues with cursor navigation in lines that contain one or more tabs
-			// if r == '\t' {
-			// 	for i := 0; i < tabSize; i++ {
-			// 		screen.SetCell(screenColumn+tabSpaceBias, screenLine, style, ' ')
-			// 		tabSpaceBias++
-			// 	}
-			// } else {
-			screen.SetCell(screenColumn+tabSpaceBias, screenLine, style, r)
-			// }
+			screen.SetCell(screenColumn, screenLine, style, r)
 		}
 	}
 }
 
 func (e *Editor) inputCapture(event *tcell.EventKey) *tcell.EventKey {
-	lines := e.content.Lines()
-
 	switch event.Key() {
 	case tcell.KeyUp:
-		if e.cursor.line > 0 {
-			e.cursor.line--
-		}
-		if e.cursor.column > len(lines[e.cursor.line]) {
-			e.cursor.column = len(lines[e.cursor.line])
-		}
+		e.cursorUp()
 	case tcell.KeyDown:
-		if e.cursor.line < len(lines)-1 {
-			e.cursor.line++
-		}
-		if e.cursor.column > len(lines[e.cursor.line]) {
-			e.cursor.column = len(lines[e.cursor.line])
-		}
+		e.cursorDown()
 	case tcell.KeyLeft:
-		if e.cursor.column > 0 {
-			e.cursor.column--
-		} else if e.cursor.line > 0 {
-			e.cursor.line--
-			e.cursor.column = len(lines[e.cursor.line])
-		}
+		e.cursorLeft()
 	case tcell.KeyRight:
-		if e.cursor.column < len(lines[e.cursor.line]) {
-			e.cursor.column++
-		} else if e.cursor.line < len(lines)-1 {
-			e.cursor.line++
-			e.cursor.column = 0
-		}
+		e.cursorRight()
 	}
 
 	return event
+}
+
+func (e *Editor) cursorUp() {
+	lines := e.content.Lines()
+
+	if e.cursor.line > 0 {
+		e.cursor.line--
+	}
+	if e.cursor.column > len(lines[e.cursor.line]) {
+		e.cursor.column = len(lines[e.cursor.line])
+	}
+}
+
+func (e *Editor) cursorDown() {
+	lines := e.content.Lines()
+
+	if e.cursor.line < len(lines)-1 {
+		e.cursor.line++
+	}
+	if e.cursor.column > len(lines[e.cursor.line]) {
+		e.cursor.column = len(lines[e.cursor.line])
+	}
+}
+
+func (e *Editor) cursorLeft() {
+	lines := e.content.Lines()
+
+	if e.cursor.column > 0 {
+		e.cursor.column--
+	} else if e.cursor.line > 0 {
+		e.cursor.line--
+		e.cursor.column = len(lines[e.cursor.line])
+	}
+}
+
+func (e *Editor) cursorRight() {
+	lines := e.content.Lines()
+
+	if e.cursor.column < len(lines[e.cursor.line]) {
+		e.cursor.column++
+	} else if e.cursor.line < len(lines)-1 {
+		e.cursor.line++
+		e.cursor.column = 0
+	}
 }

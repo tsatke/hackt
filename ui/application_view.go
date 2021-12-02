@@ -15,7 +15,7 @@ type ApplicationView struct {
 	doneCh     chan error
 	ui         *cview.Application
 	explorer   *Explorer
-	editorArea *Editor
+	editorTabs *EditorTabs
 }
 
 func NewApplicationView(log zerolog.Logger, events *event.Bus) *ApplicationView {
@@ -27,13 +27,13 @@ func NewApplicationView(log zerolog.Logger, events *event.Bus) *ApplicationView 
 	explorer := NewExplorer(log, events)
 	layout.AddItem(explorer, 0, 2, false)
 
-	editorArea := NewEditor(log, events)
-	layout.AddItem(editorArea, 0, 8, true)
+	editorTabs := NewEditorTabs(log, events)
+	layout.AddItem(editorTabs, 0, 8, true)
 
 	go func() {
 		// FIXME: ugly workaround for the TabbedPanels not repainting as new ones are added
 		for {
-			ui.Draw(editorArea)
+			ui.Draw(editorTabs)
 			time.Sleep(34 * time.Millisecond) // about 30 FPS
 		}
 	}()
@@ -45,7 +45,7 @@ func NewApplicationView(log zerolog.Logger, events *event.Bus) *ApplicationView 
 		ui:         ui,
 		doneCh:     make(chan error, 1),
 		explorer:   explorer,
-		editorArea: editorArea,
+		editorTabs: editorTabs,
 	}
 }
 

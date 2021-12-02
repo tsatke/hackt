@@ -2,10 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-	"regexp"
 
 	"code.rocketnine.space/tslocum/cview"
 	"github.com/gdamore/tcell/v2"
@@ -14,161 +10,137 @@ import (
 	"github.com/tsatke/hackt/event"
 )
 
+var _ cview.Primitive = (*Editor)(nil)
+
 type Editor struct {
-	log    zerolog.Logger
-	events *event.Bus
+	log zerolog.Logger
 
-	tabs *cview.TabbedPanels
-}
+	UI
+	cursor CursorPosition
 
-var tabNameSanitizingRegexp = regexp.MustCompile(`[^a-zA-Z0-9 ]`)
-
-func NewEditor(log zerolog.Logger, events *event.Bus) *Editor {
-	tabs := cview.NewTabbedPanels()
-	tabs.SetBorder(true)
-	tabs.SetTitle("Editor")
-
-	editor := &Editor{
-		log:    log,
-		events: events,
-
-		tabs: tabs,
-	}
-
-	events.ProjectFileOpen.Register(editor.processFileOpenRequest)
-
-	return editor
-}
-
-func (e *Editor) processFileOpenRequest(event event.ProjectFileOpenPayload) {
-	e.log.Debug().
-		Str("path", event.Path).
-		Str("project", event.Project.Name()).
-		Msg("open file in editor")
-
-	file, err := event.Project.Fs().OpenFile(event.Path, os.O_RDWR, 0666)
-	if err != nil {
-		e.log.Error().
-			Err(err).
-			Str("path", event.Path).
-			Msg("unable to open file")
-		return
-	}
-
-	tabName := tabNameSanitizingRegexp.ReplaceAllString(event.Project.Name()+" "+event.Path, " ")
-	tab, err := NewEditorTab(e.log, e.events, file)
-	if err != nil {
-		e.log.Error().
-			Err(err).
-			Str("path", event.Path).
-			Msg("unable to create tab from file")
-		return
-	}
-
-	e.tabs.AddTab(tabName, filepath.Base(event.Path), tab)
-}
-
-// implement cview.Primitive, but delegate everything to the actual underlying TabbedPanels
-
-func (e Editor) Draw(screen tcell.Screen) {
-	e.tabs.Draw(screen)
-}
-
-func (e Editor) GetRect() (int, int, int, int) {
-	return e.tabs.GetRect()
-}
-
-func (e Editor) SetRect(x, y, width, height int) {
-	e.tabs.SetRect(x, y, width, height)
-}
-
-func (e Editor) GetVisible() bool {
-	return e.tabs.GetVisible()
-}
-
-func (e Editor) SetVisible(v bool) {
-	e.tabs.SetVisible(v)
-}
-
-func (e Editor) InputHandler() func(event *tcell.EventKey, setFocus func(p cview.Primitive)) {
-	return e.tabs.InputHandler()
-}
-
-func (e Editor) Focus(delegate func(p cview.Primitive)) {
-	e.tabs.Focus(delegate)
-}
-
-func (e Editor) Blur() {
-	e.tabs.Blur()
-}
-
-func (e Editor) GetFocusable() cview.Focusable {
-	return e.tabs.GetFocusable()
-}
-
-func (e Editor) MouseHandler() func(action cview.MouseAction, event *tcell.EventMouse, setFocus func(p cview.Primitive)) (consumed bool, capture cview.Primitive) {
-	return e.tabs.MouseHandler()
-}
-
-type EditorTab struct {
-	field       *cview.TextView
 	backingFile afero.File
+	content     *EditorContent
 }
 
-func NewEditorTab(log zerolog.Logger, events *event.Bus, file afero.File) (*EditorTab, error) {
-	field := cview.NewTextView()
-	_, err := io.Copy(field, file)
+type CursorPosition struct {
+	line   int
+	column int
+}
+
+type UI struct {
+	cview.Primitive
+	contentArea *cview.Box
+	layout      cview.Primitive
+}
+
+func NewEditorTab(log zerolog.Logger, events *event.Bus, file afero.File) (*Editor, error) {
+	layout := cview.NewFlex()
+	contentArea := cview.NewBox()
+	layout.AddItem(contentArea, 0, 10, false)
+
+	data, err := afero.ReadAll(file)
 	if err != nil {
-		return nil, fmt.Errorf("read: %w", err)
+		return nil, fmt.Errorf("read file: %w", err)
 	}
 
-	return &EditorTab{
-		field: field,
-	}, nil
+	content := NewBuffer(data)
+
+	e := &Editor{
+		log: log,
+		UI: UI{
+			Primitive:   layout,
+			layout:      layout,
+			contentArea: contentArea,
+		},
+		backingFile: file,
+		content:     content,
+	}
+
+	contentArea.SetInputCapture(e.inputCapture)
+
+	return e, nil
 }
 
-func (tab *EditorTab) Close() error {
-	return tab.backingFile.Close()
+func (e *Editor) Close() error {
+	return e.backingFile.Close()
 }
 
-// implement cview.Primitive, but delegate everything to the actual underlying InputField
+func (e *Editor) Draw(screen tcell.Screen) {
+	e.layout.Draw(screen)
 
-func (tab EditorTab) Draw(screen tcell.Screen) {
-	tab.field.Draw(screen)
+	// tabSize := cview.TabSize
+	style := tcell.Style{}.Foreground(tcell.ColorWhite).Background(tcell.ColorBlack)
+
+	lines := e.content.Lines()
+
+	x, y, width, height := e.UI.contentArea.GetInnerRect()
+	for screenLine := y; screenLine < y+height; screenLine++ {
+		contentLine := screenLine - y
+		if contentLine >= len(lines) {
+			break
+		}
+		lineBytes := lines[contentLine]
+		lineRunes := []rune(string(lineBytes))
+		tabSpaceBias := 0
+		for screenColumn := x; screenColumn < x+width; screenColumn++ {
+			contentColumn := screenColumn - x
+
+			// check if we should draw the cursor here
+			if e.cursor.line == contentLine && e.cursor.column == contentColumn {
+				screen.ShowCursor(screenColumn, screenLine)
+			}
+
+			r := ' '
+			if contentColumn < len(lineRunes) {
+				r = lineRunes[contentColumn]
+			}
+
+			// FIXME: when replacing tabs with 4 spaces, we get issues with cursor navigation in lines that contain one or more tabs
+			// if r == '\t' {
+			// 	for i := 0; i < tabSize; i++ {
+			// 		screen.SetCell(screenColumn+tabSpaceBias, screenLine, style, ' ')
+			// 		tabSpaceBias++
+			// 	}
+			// } else {
+			screen.SetCell(screenColumn+tabSpaceBias, screenLine, style, r)
+			// }
+		}
+	}
 }
 
-func (tab EditorTab) GetRect() (int, int, int, int) {
-	return tab.field.GetRect()
-}
+func (e *Editor) inputCapture(event *tcell.EventKey) *tcell.EventKey {
+	lines := e.content.Lines()
 
-func (tab EditorTab) SetRect(x, y, width, height int) {
-	tab.field.SetRect(x, y, width, height)
-}
+	switch event.Key() {
+	case tcell.KeyUp:
+		if e.cursor.line > 0 {
+			e.cursor.line--
+		}
+		if e.cursor.column > len(lines[e.cursor.line]) {
+			e.cursor.column = len(lines[e.cursor.line])
+		}
+	case tcell.KeyDown:
+		if e.cursor.line < len(lines)-1 {
+			e.cursor.line++
+		}
+		if e.cursor.column > len(lines[e.cursor.line]) {
+			e.cursor.column = len(lines[e.cursor.line])
+		}
+	case tcell.KeyLeft:
+		if e.cursor.column > 0 {
+			e.cursor.column--
+		} else if e.cursor.line > 0 {
+			e.cursor.line--
+			e.cursor.column = len(lines[e.cursor.line])
+		}
+	case tcell.KeyRight:
+		if e.cursor.column < len(lines[e.cursor.line]) {
+			e.cursor.column++
+		} else if e.cursor.line < len(lines)-1 {
+			e.cursor.line++
+			e.cursor.column = 0
+		}
+	}
 
-func (tab EditorTab) GetVisible() bool {
-	return tab.field.GetVisible()
-}
-
-func (tab EditorTab) SetVisible(v bool) {
-	tab.field.SetVisible(v)
-}
-
-func (tab EditorTab) InputHandler() func(event *tcell.EventKey, setFocus func(p cview.Primitive)) {
-	return tab.field.InputHandler()
-}
-
-func (tab EditorTab) Focus(delegate func(p cview.Primitive)) {
-	tab.field.Focus(delegate)
-}
-
-func (tab EditorTab) Blur() {
-	tab.field.Blur()
-}
-
-func (tab EditorTab) GetFocusable() cview.Focusable {
-	return tab.field.GetFocusable()
-}
-
-func (tab EditorTab) MouseHandler() func(action cview.MouseAction, event *tcell.EventMouse, setFocus func(p cview.Primitive)) (consumed bool, capture cview.Primitive) {
-	return tab.field.MouseHandler()
+	return event
 }

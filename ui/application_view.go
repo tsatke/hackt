@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"time"
-
 	"code.rocketnine.space/tslocum/cview"
 	"github.com/rs/zerolog"
 	"github.com/tsatke/hackt/event"
@@ -38,13 +36,9 @@ func NewApplicationView(log zerolog.Logger, events *event.Bus) *ApplicationView 
 	editorTabs := NewEditorTabs(log, events)
 	hlayout.AddItem(editorTabs, 0, 8, true)
 
-	go func() {
-		// FIXME: ugly workaround for the TabbedPanels not repainting as new ones are added
-		for {
-			ui.Draw(editorTabs)
-			time.Sleep(34 * time.Millisecond) // about 30 FPS
-		}
-	}()
+	events.UI.Register(func(payload event.UIRedrawPayload) {
+		ui.Draw(payload.Components...)
+	})
 
 	return &ApplicationView{
 		log:    log,

@@ -36,31 +36,35 @@ func NewEditorTabs(log zerolog.Logger, events *event.Bus) *EditorTabs {
 	return editor
 }
 
-func (e *EditorTabs) processFileOpenRequest(event event.ProjectFileOpenPayload) {
+func (e *EditorTabs) processFileOpenRequest(evt event.ProjectFileOpenPayload) {
 	e.log.Debug().
-		Str("path", event.Path).
-		Str("project", event.Project.Name()).
+		Str("path", evt.Path).
+		Str("project", evt.Project.Name()).
 		Msg("open file in editor")
 
-	file, err := event.Project.Fs().OpenFile(event.Path, os.O_RDWR, 0666)
+	file, err := evt.Project.Fs().OpenFile(evt.Path, os.O_RDWR, 0666)
 	if err != nil {
 		e.log.Error().
 			Err(err).
-			Str("path", event.Path).
+			Str("path", evt.Path).
 			Msg("unable to open file")
 		return
 	}
 
-	tabName := tabNameSanitizingRegexp.ReplaceAllString(event.Project.Name()+" "+event.Path, " ")
+	tabName := tabNameSanitizingRegexp.ReplaceAllString(evt.Project.Name()+" "+evt.Path, " ")
 	tab, err := NewEditorTab(e.log, e.events, file)
 	if err != nil {
 		e.log.Error().
 			Err(err).
-			Str("path", event.Path).
+			Str("path", evt.Path).
 			Msg("unable to create tab from file")
 		return
 	}
 
-	e.TabbedPanels.AddTab(tabName, filepath.Base(event.Path), tab)
+	e.TabbedPanels.AddTab(tabName, filepath.Base(evt.Path), tab)
 	e.TabbedPanels.SetCurrentTab(tabName)
+
+	e.events.UI.UIRedraw.Trigger(event.UIRedrawPayload{
+		Components: []cview.Primitive{e},
+	})
 }

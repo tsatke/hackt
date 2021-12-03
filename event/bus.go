@@ -5,6 +5,9 @@ import "github.com/rs/zerolog"
 type Bus struct {
 	log zerolog.Logger
 
+	UI struct {
+		UIRedraw
+	}
 	Project struct {
 		ProjectCreated
 		ProjectFileOpen

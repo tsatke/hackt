@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"code.rocketnine.space/tslocum/cview"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rs/zerolog"
 	"github.com/spf13/afero"
@@ -13,7 +14,8 @@ import (
 var _ cview.Primitive = (*Editor)(nil)
 
 type Editor struct {
-	log zerolog.Logger
+	log    zerolog.Logger
+	events *event.Bus
 
 	EditorUI
 	cursor CursorPosition
@@ -46,7 +48,8 @@ func NewEditorTab(log zerolog.Logger, events *event.Bus, file afero.File) (*Edit
 	content := NewBuffer(data)
 
 	e := &Editor{
-		log: log,
+		log:    log,
+		events: events,
 		EditorUI: EditorUI{
 			Primitive:   layout,
 			layout:      layout,
@@ -98,8 +101,10 @@ func (e *Editor) Draw(screen tcell.Screen) {
 	}
 }
 
-func (e *Editor) inputCapture(event *tcell.EventKey) *tcell.EventKey {
-	switch event.Key() {
+func (e *Editor) inputCapture(evt *tcell.EventKey) *tcell.EventKey {
+	e.log.Info().Msg(spew.Sdump(evt))
+
+	switch evt.Key() {
 	case tcell.KeyUp:
 		e.cursorUp()
 	case tcell.KeyDown:
@@ -108,19 +113,34 @@ func (e *Editor) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		e.cursorLeft()
 	case tcell.KeyRight:
 		e.cursorRight()
+	case tcell.KeyDEL:
+		e.backspace()
 	default:
-		r := event.Rune()
+		r := evt.Rune()
 		if r != 0 {
 			e.insertRune(r)
 			e.cursorRight()
 		}
 	}
 
-	return event
+	e.events.UI.UIRedraw.Trigger(event.UIRedrawPayload{
+		Components: []cview.Primitive{e},
+	})
+
+	return evt
 }
 
 func (e *Editor) insertRune(r rune) {
-	_, _ = e.content.InsertAt([]byte(string(r)), e.cursorOffset())
+	e.content.InsertAt([]byte(string(r)), e.cursorOffset())
+}
+
+func (e *Editor) backspace() {
+	e.content.DeleteAt(1, e.cursorOffset()-1)
+	e.cursorLeft()
+}
+
+func (e *Editor) delete() {
+	e.content.DeleteAt(1, e.cursorOffset())
 }
 
 func (e *Editor) cursorOffset() (offset int64) {

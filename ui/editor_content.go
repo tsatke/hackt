@@ -50,11 +50,16 @@ func (c *EditorContent) WriteAt(p []byte, off int64) (n int, err error) {
 	return len(p), nil
 }
 
-func (c *EditorContent) InsertAt(p []byte, off int64) (n int, err error) {
+func (c *EditorContent) InsertAt(p []byte, off int64) {
 	c.invalidateLinesCache()
 
 	c.data = append(c.data[:off], append(p, c.data[off:]...)...)
-	return len(p), nil
+}
+
+func (c *EditorContent) DeleteAt(len int64, off int64) {
+	c.invalidateLinesCache()
+
+	c.data = append(c.data[:off], c.data[off+len:]...)
 }
 
 func (c *EditorContent) Copy() *EditorContent {

@@ -63,7 +63,6 @@ func (view *ApplicationView) Run() {
 
 		// enable mouse support
 		view.ui.EnableMouse(true)
-		view.ui.SetDoubleClickInterval(cview.StandardDoubleClick)
 
 		view.doneCh <- view.ui.Run()
 	}()

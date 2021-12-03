@@ -62,4 +62,5 @@ func (e *EditorTabs) processFileOpenRequest(event event.ProjectFileOpenPayload) 
 	}
 
 	e.TabbedPanels.AddTab(tabName, filepath.Base(event.Path), tab)
+	e.TabbedPanels.SetCurrentTab(tabName)
 }

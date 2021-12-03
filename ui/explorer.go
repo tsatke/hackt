@@ -37,7 +37,7 @@ func NewExplorer(log zerolog.Logger, events *event.Bus) *Explorer {
 		tree: tree,
 		root: root,
 	}
-	events.ProjectLoaded.Register(explorer.projectLoaded)
+	events.Project.ProjectLoaded.Register(explorer.projectLoaded)
 
 	return explorer
 }
@@ -97,10 +97,6 @@ func (e *Explorer) createTreeNodeFromProject(p *workspace.Project) (*cview.TreeN
 		})
 
 		for _, info := range res {
-			e.log.Info().
-				Str("name", info.Name()).
-				Msg("add")
-
 			if strings.HasPrefix(info.Name(), ".") {
 				continue // skip dot files
 			}
@@ -126,7 +122,7 @@ func (e *Explorer) createTreeNodeFromProject(p *workspace.Project) (*cview.TreeN
 
 func (e *Explorer) makeOpenable(node *cview.TreeNode, p *workspace.Project, path string) {
 	node.SetSelectedFunc(func() {
-		e.events.ProjectFileOpen.Trigger(event.ProjectFileOpenPayload{
+		e.events.Project.ProjectFileOpen.Trigger(event.ProjectFileOpenPayload{
 			Project: p,
 			Path:    path,
 		})

@@ -14,6 +14,7 @@ type ApplicationView struct {
 
 	doneCh     chan error
 	ui         *cview.Application
+	menuBar    *MenuBar
 	explorer   *Explorer
 	editorTabs *EditorTabs
 }
@@ -21,14 +22,21 @@ type ApplicationView struct {
 func NewApplicationView(log zerolog.Logger, events *event.Bus) *ApplicationView {
 	ui := cview.NewApplication()
 
-	layout := cview.NewFlex()
-	ui.SetRoot(layout, true)
+	vlayout := cview.NewFlex()
+	vlayout.SetDirection(cview.FlexRow)
+	ui.SetRoot(vlayout, true)
+
+	menuBar := NewMenuBar(log, events)
+	vlayout.AddItem(menuBar, 3, 0, false)
+
+	hlayout := cview.NewFlex()
+	vlayout.AddItem(hlayout, 0, 1, true)
 
 	explorer := NewExplorer(log, events)
-	layout.AddItem(explorer, 0, 2, false)
+	hlayout.AddItem(explorer, 0, 2, false)
 
 	editorTabs := NewEditorTabs(log, events)
-	layout.AddItem(editorTabs, 0, 8, true)
+	hlayout.AddItem(editorTabs, 0, 8, true)
 
 	go func() {
 		// FIXME: ugly workaround for the TabbedPanels not repainting as new ones are added
@@ -59,6 +67,11 @@ func (view *ApplicationView) Run() {
 
 		view.doneCh <- view.ui.Run()
 	}()
+}
+
+func (view *ApplicationView) Stop() {
+	view.ui.Stop()
+	view.doneCh <- nil // FIXME: calling stop for some reason doesn't seem to make Run return...
 }
 
 func (view *ApplicationView) Done() <-chan error {

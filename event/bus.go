@@ -5,9 +5,14 @@ import "github.com/rs/zerolog"
 type Bus struct {
 	log zerolog.Logger
 
-	ProjectCreated
-	ProjectFileOpen
-	ProjectLoaded
+	Project struct {
+		ProjectCreated
+		ProjectFileOpen
+		ProjectLoaded
+	}
+	MenuBar struct {
+		MenuBarExit
+	}
 }
 
 func NewBus(log zerolog.Logger) *Bus {

@@ -31,7 +31,7 @@ func NewEditorTabs(log zerolog.Logger, events *event.Bus) *EditorTabs {
 		TabbedPanels: tabs,
 	}
 
-	events.ProjectFileOpen.Register(editor.processFileOpenRequest)
+	events.Project.ProjectFileOpen.Register(editor.processFileOpenRequest)
 
 	return editor
 }

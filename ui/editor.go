@@ -15,7 +15,7 @@ var _ cview.Primitive = (*Editor)(nil)
 type Editor struct {
 	log zerolog.Logger
 
-	UI
+	EditorUI
 	cursor CursorPosition
 
 	backingFile afero.File
@@ -27,7 +27,7 @@ type CursorPosition struct {
 	column int
 }
 
-type UI struct {
+type EditorUI struct {
 	cview.Primitive
 	contentArea *cview.Box
 	layout      cview.Primitive
@@ -47,7 +47,7 @@ func NewEditorTab(log zerolog.Logger, events *event.Bus, file afero.File) (*Edit
 
 	e := &Editor{
 		log: log,
-		UI: UI{
+		EditorUI: EditorUI{
 			Primitive:   layout,
 			layout:      layout,
 			contentArea: contentArea,
@@ -72,7 +72,7 @@ func (e *Editor) Draw(screen tcell.Screen) {
 
 	lines := e.content.Lines()
 
-	x, y, width, height := e.UI.contentArea.GetInnerRect()
+	x, y, width, height := e.EditorUI.contentArea.GetInnerRect()
 	for screenLine := y; screenLine < y+height; screenLine++ {
 		contentLine := screenLine - y
 		if contentLine >= len(lines) {

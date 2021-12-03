@@ -24,16 +24,28 @@ type Application struct {
 func NewApplication(log zerolog.Logger) *Application {
 	events := event.NewBus(log)
 
-	return &Application{
+	app := &Application{
 		log:    log,
 		events: events,
 		view:   ui.NewApplicationView(log, events),
 	}
+
+	events.MenuBar.MenuBarExit.Register(func(_ event.MenuBarExitPayload) {
+		app.log.Debug().
+			Msg("menu bar requested exit")
+		app.Stop()
+	})
+	return app
 }
 
 func (app Application) Run() {
-	app.log.Info().Msg("start hackt ui")
+	app.log.Info().
+		Msg("start hackt ui")
 	app.view.Run()
+}
+
+func (app Application) Stop() {
+	app.view.Stop()
 }
 
 func (app Application) Wait() error {
@@ -70,7 +82,7 @@ func (app Application) LoadProject(p *workspace.Project) error {
 		Str("name", p.Name()).
 		Msg("load project")
 
-	app.events.ProjectLoaded.Trigger(event.ProjectLoadedPayload{Project: p})
+	app.events.Project.ProjectLoaded.Trigger(event.ProjectLoadedPayload{Project: p})
 
 	return nil
 }

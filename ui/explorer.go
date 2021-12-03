@@ -66,6 +66,7 @@ func (e *Explorer) createTreeNodeFromProject(p *workspace.Project) (*cview.TreeN
 	depth := 0
 	addRecursive = func(root afero.Fs, path string, parent *cview.TreeNode) {
 		depth++
+		defer func() { depth-- }()
 
 		if depth > 5 { // introduce this to prevent an infinite hang
 			e.log.Debug().

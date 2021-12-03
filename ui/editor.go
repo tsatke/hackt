@@ -108,9 +108,31 @@ func (e *Editor) inputCapture(event *tcell.EventKey) *tcell.EventKey {
 		e.cursorLeft()
 	case tcell.KeyRight:
 		e.cursorRight()
+	default:
+		r := event.Rune()
+		if r != 0 {
+			e.insertRune(r)
+			e.cursorRight()
+		}
 	}
 
 	return event
+}
+
+func (e *Editor) insertRune(r rune) {
+	_, _ = e.content.InsertAt([]byte(string(r)), e.cursorOffset())
+}
+
+func (e *Editor) cursorOffset() (offset int64) {
+	lines := e.content.Lines()
+	for i := 0; i < e.cursor.line; i++ {
+		offset += int64(len(lines[i]))
+		offset++ // add 1 for a linefeed byte
+	}
+
+	offset += int64(e.cursor.column)
+
+	return
 }
 
 func (e *Editor) cursorUp() {

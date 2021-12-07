@@ -22,6 +22,7 @@ type Editor struct {
 
 	backingFile afero.File
 	content     *EditorContent
+	startLine   int
 }
 
 type CursorPosition struct {
@@ -76,20 +77,31 @@ func (e *Editor) Draw(screen tcell.Screen) {
 	lines := e.content.Lines()
 
 	x, y, width, height := e.EditorUI.contentArea.GetInnerRect()
+
+	// draw cursor
+	screenCursorX := x + e.cursor.column
+	screenCursorY := y + e.cursor.line - e.startLine
+	if e.EditorUI.contentArea.InRect(screenCursorX, screenCursorY) {
+		screen.ShowCursor(x+e.cursor.column, y+e.cursor.line-e.startLine)
+	} else if screenCursorY < y {
+		e.startLine--
+	} else if screenCursorY > y+height {
+		e.startLine++
+	} else {
+		// FIXME: handle cursor out of bounds right/left of the screen
+	}
+
 	for screenLine := y; screenLine < y+height; screenLine++ {
-		contentLine := screenLine - y
+		contentLine := screenLine - y + e.startLine
 		if contentLine >= len(lines) {
+			// if there are no more lines, don't try to draw any
 			break
 		}
 		lineBytes := lines[contentLine]
 		lineRunes := []rune(string(lineBytes))
 		for screenColumn := x; screenColumn < x+width; screenColumn++ {
-			contentColumn := screenColumn - x
 
-			// check if we should draw the cursor here
-			if e.cursor.line == contentLine && e.cursor.column == contentColumn {
-				screen.ShowCursor(screenColumn, screenLine)
-			}
+			contentColumn := screenColumn - x
 
 			r := ' '
 			if contentColumn < len(lineRunes) {
@@ -97,7 +109,10 @@ func (e *Editor) Draw(screen tcell.Screen) {
 			}
 
 			screen.SetCell(screenColumn, screenLine, style, r)
+
 		}
+		// render scroll bar on top of the last column
+		cview.RenderScrollBar(screen, cview.ScrollBarAuto, x+width-1, screenLine, height, len(lines), e.cursor.line, contentLine-e.startLine, true, tcell.ColorWhite)
 	}
 }
 

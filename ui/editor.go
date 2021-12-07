@@ -130,6 +130,9 @@ func (e *Editor) inputCapture(evt *tcell.EventKey) *tcell.EventKey {
 		e.cursorRight()
 	case tcell.KeyDEL:
 		e.backspace()
+	case tcell.KeyEnter:
+		e.insertRune('\n')
+		e.cursorRight()
 	default:
 		r := evt.Rune()
 		if r != 0 {

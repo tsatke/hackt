@@ -150,8 +150,12 @@ func (e *Editor) insertRune(r rune) {
 }
 
 func (e *Editor) backspace() {
-	e.content.DeleteAt(1, e.cursorOffset()-1)
+	if e.cursorOffset() == 0 {
+		// don't delete at the start of the file
+		return
+	}
 	e.cursorLeft()
+	e.delete()
 }
 
 func (e *Editor) delete() {
